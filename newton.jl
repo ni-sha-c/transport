@@ -27,7 +27,7 @@ function dtarget_score(x, m, v, w, k)
 	score = target_score(x,m,v,w,k)
 	dscore = 0.0
 	for n = 1:k
-			dscore += gaussian(x, m[n], v[n])*((x-m[n])^2/v[n]^4 - 1/v[n]^2)
+			dscore += gaussian(x, m[n], v[n])*w[n]*((x-m[n])^2/v[n]^4 - 1/v[n]^2)
 	end
 	dscore /= prob
 	dscore -= score*score
@@ -52,8 +52,8 @@ end
 
 w1, w2 = 0.5, 0.4
 w3 = 1 - (w1 + w2)
-m1, m2, m3 = 1.0, 1.0, 1.0
-v1, v2, v3 = 1.0, 1.0, 1.0
+m1, m2, m3 = 0.0, 1.0, 2.0
+v1, v2, v3 = 1.0, 0.5, 2.0
 w = [w1, w2, w3]
 m = [m1, m2, m3]
 v = [v1, v2, v3]
