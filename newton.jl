@@ -21,7 +21,8 @@ function mixture_prob(x, m, s, w, k)
 	return prob
 end
 function source_score(x, m, s)
-	return -(x-m)/s/s
+	#return -(x-m)/s/s
+	return 0.0
 end
 function dtarget_score(x, m, s, w, k)
 	prob = mixture_prob(x,m,s,w,k)
@@ -70,11 +71,10 @@ function transport_by_kam(N,K,r,mref,sref,m,s,w,nm)
 	v = zeros(N)
 	vp = zeros(N)
 	vpp = zeros(N)
-
+	Tx = zeros(N)
 
 	for n = 1:N-2
 		parr[n] = source_score(x[n], mref, sref)
- 
 		qarr[n] = target_score(x[n],m,s,w,nm)
 		dqarr[n] = dtarget_score(x[n],m,s,w,nm)
 	end
@@ -83,7 +83,15 @@ function transport_by_kam(N,K,r,mref,sref,m,s,w,nm)
 			vp[n+1] = (v[n+2]-v[n])*dxinv/2.0
 			vpp[n+1] = (-2*v[n+1] + v[n+2] + v[n])*dx2inv
 			parr[n] = parr[n]/(1 + vp[n+1]) - vpp[n+1]/(1 + vp[n+1])^2
-			p = parr[n]			
+		end
+		order = sortperm(x)
+		x = x[order]
+		parr = parr[order]
+		parr_int = linear_interpolation(x, parr)
+		v_int = linear_interpolation(x_gr, v)
+		x = x .+ v_int.(x)
+		for n = 1:N-2
+			p = parr_int(x_gr[n+1])			
 			q = qarr[n] 			
 			dq = dqarr[n]
 			b[n] = p - q
