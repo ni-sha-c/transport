@@ -4,6 +4,7 @@ using Interpolations
 using PyPlot
 using Printf
 function target_score(x, m, s, w, k)
+	return -6.0
 	prob = mixture_prob(x, m, s, w, k)
 	score = 0.0
 	for n = 1:k
@@ -25,9 +26,11 @@ function mixture_prob(x, m, s, w, k)
 end
 function source_score(x, m, s)
 	#return -(x-m)/s/s
-	return 0.0
+	#return 0.0
+	return -6.0
 end
 function dtarget_score(x, m, s, w, k)
+	return 8.0
 	prob = mixture_prob(x,m,s,w,k)
 	score = target_score(x,m,s,w,k)
 	dscore = 0.0
@@ -54,7 +57,7 @@ function test_dtarget_score(x,m,s,w,k)
 	@show "d scores from fd, analytical", dscore_fd, dscore
 	@test dscore_fd ≈ dscore atol=1.e-8
 end
-function transport_by_kam(N,K,r,mref,sref,m,s,w,nm)
+function transport_by_kam(N,K,r,mref,sref,m,s,w,nm,v0,vn)
 	x_gr = Array(LinRange(-r,r,N+1))
 	dx = x_gr[2] - x_gr[1]
 		
@@ -72,6 +75,8 @@ function transport_by_kam(N,K,r,mref,sref,m,s,w,nm)
 	qarr = zeros(N-2)
 	dqarr = zeros(N-2)
 	v = zeros(N)
+	v[1] = v0
+	v[N] = vn
 	vp = zeros(N)
 	vpp = zeros(N)
 	Tx = zeros(N)
@@ -92,7 +97,7 @@ function transport_by_kam(N,K,r,mref,sref,m,s,w,nm)
 		x_temp = x_temp[order]
 		parr = parr[order]
 		parr_int = linear_interpolation(x_temp, parr,extrapolation_bc=Line())
-		v_int = linear_interpolation(x_gr, v,extrapolation_bc=Line())
+		v_int = linear_interpolation(x_gr, v, extrapolation_bc=Line())
 		x = x .+ v_int.(x)
 		for n = 1:N-2
 			p = parr_int(x_gr[n+1])			
@@ -107,6 +112,12 @@ function transport_by_kam(N,K,r,mref,sref,m,s,w,nm)
 				A[n, n-1] += dx2inv
 				A[n, n-1] += -p*dxinv/2
 			end
+			if n == 1
+				b[n] -= (v0*dx2inv + p/2*dxinv*v0)
+			end
+			if n == N-2
+				b[n] -= (vn*dx2inv - p/2*dxinv*vn)
+			end
 			A[n, n] = dq - 2.0*dx2inv
 
 		end
@@ -114,7 +125,7 @@ function transport_by_kam(N,K,r,mref,sref,m,s,w,nm)
 		v[2:N-1] .= vint
 		@printf "At k= %d, ||v|| = %f \n" k norm(v)
 	end
-	return x
+	return v
 end
 function sample_target(N, m, s, w, K)
 	x = zeros(N)
@@ -143,11 +154,23 @@ s1, s2, s3 = 1.0, 0.5, 2.0
 w = [w1, w2, w3]
 m = [m1, m2, m3]
 s = [s1, s2, s3]
+#fig, ax = subplots()
+#ax.xaxis.set_tick_params(labelsize=30)
+#ax.yaxis.set_tick_params(labelsize=30)
+k = 3
+#x = sample_target(2000,m,s,w,k)
+#ax.hist(x,bins=100,density=true)
+#Tx = transport_by_kam(2000,3,10,1,1,m,s,w,k,0,0)
+#ax.hist(Tx,bins=100,density=true)
+r = 1
+M = 5000
+x_gr = Array(LinRange(-r,r,M))
+v0, vn = exp(-1)*exp(-1), exp(1)*exp(1)
 fig, ax = subplots()
 ax.xaxis.set_tick_params(labelsize=30)
 ax.yaxis.set_tick_params(labelsize=30)
-k = 3
-x = sample_target(2000,m,s,w,k)
-ax.hist(x,bins=100,density=true)
-Tx = transport_by_kam(2000,3,10,1,1,m,s,w,k)
-ax.hist(Tx,bins=100,density=true)
+ax.plot(x_gr, exp.(2*x_gr), ".", label="Analytical", ms=10)
+Tx = transport_by_kam(M,1,r,1,1,m,s,w,k,v0,vn)
+ax.plot(x_gr, Tx, "^", label="Transport", ms=10)
+ax.legend(fontsize=30)
+@show norm(Tx - exp.(2*x_gr))
