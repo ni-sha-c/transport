@@ -1,5 +1,8 @@
 using Test
 using LinearAlgebra
+using Interpolations
+using PyPlot
+using Printf
 function target_score(x, m, s, w, k)
 	prob = mixture_prob(x, m, s, w, k)
 	score = 0.0
@@ -88,8 +91,8 @@ function transport_by_kam(N,K,r,mref,sref,m,s,w,nm)
 		order = sortperm(x_temp)
 		x_temp = x_temp[order]
 		parr = parr[order]
-		parr_int = linear_interpolation(x_temp, parr)
-		v_int = linear_interpolation(x_gr, v)
+		parr_int = linear_interpolation(x_temp, parr,extrapolation_bc=Line())
+		v_int = linear_interpolation(x_gr, v,extrapolation_bc=Line())
 		x = x .+ v_int.(x)
 		for n = 1:N-2
 			p = parr_int(x_gr[n+1])			
@@ -109,10 +112,30 @@ function transport_by_kam(N,K,r,mref,sref,m,s,w,nm)
 		end
 		vint = A\b
 		v[2:N-1] .= vint
+		@printf "At k= %d, ||v|| = %f \n" k norm(v)
 	end
 	return x
 end
-
+function sample_target(N, m, s, w, K)
+	x = zeros(N)
+	order = sortperm(w)
+	w = w[order]
+	m = m[order]
+	s = s[order]
+	c = K
+	for n = 1:N
+		u = rand()
+		c = K
+		for k = 1:K
+			if u < w[k]
+				c = k
+				break
+			end
+		end
+		x[n] = m[c] + s[c]*randn()
+	end
+	return x
+end
 w1, w2 = 0.5, 0.4
 w3 = 1 - (w1 + w2)
 m1, m2, m3 = 0.0, 1.0, 2.0
@@ -120,6 +143,11 @@ s1, s2, s3 = 1.0, 0.5, 2.0
 w = [w1, w2, w3]
 m = [m1, m2, m3]
 s = [s1, s2, s3]
-x = rand()
-
-
+fig, ax = subplots()
+ax.xaxis.set_tick_params(labelsize=30)
+ax.yaxis.set_tick_params(labelsize=30)
+k = 3
+x = sample_target(2000,m,s,w,k)
+ax.hist(x,bins=100,density=true)
+Tx = transport_by_kam(2000,3,10,1,1,m,s,w,k)
+ax.hist(Tx,bins=100,density=true)
