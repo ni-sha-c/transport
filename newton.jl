@@ -50,39 +50,59 @@ function test_dtarget_score(x,m,s,w,k)
 	@show "d scores from fd, analytical", dscore_fd, dscore
 	@test dscore_fd ≈ dscore atol=1.e-8
 end
-function solve_newton_step(N,r,mref,sref,m,s,w,k)
+function transport_by_kam(N,K,r,mref,sref,m,s,w,nm)
 	x_gr = Array(LinRange(-r,r,N+1))
 	dx = x_gr[2] - x_gr[1]
+		
+	x_gr = x_gr .+ dx/2
+	x_gr = x_gr[1:N]	
 	x = x_gr[2:N-1]
-	x .+= dx/2
+	Tx = zeros(N)
 
 	dxinv = 1/dx
 	dx2inv = dxinv*dxinv
 
 	A = zeros(N-2,N-2)	
 	b = zeros(N-2)
-	
-	for n = 1:N-2
-		p = source_score(x[n], mref, sref)
-		q = target_score(x[n],m,s,w,k)
-		dq = dtarget_score(x[n],m,s,w,k)
-
-		b[n] = p - q
-		if n < N-2
-			A[n, n+1] += dx2inv
-			A[n, n+1] += p*dxinv/2
-		end
-		if n > 1
-			A[n, n-1] += dx2inv
-			A[n, n-1] += -p*dxinv/2
-		end
-		A[n, n] = dq -2.0*dx2inv
-
-	end
-	vint = A\b
+	parr = zeros(N-2)
+	qarr = zeros(N-2)
+	dqarr = zeros(N-2)
 	v = zeros(N)
-	v[2:N-1] .= vint
-	return v
+	vp = zeros(N)
+	vpp = zeros(N)
+
+
+	for n = 1:N-2
+		parr[n] = source_score(x[n], mref, sref)
+ 
+		qarr[n] = target_score(x[n],m,s,w,nm)
+		dqarr[n] = dtarget_score(x[n],m,s,w,nm)
+	end
+	for k = 1:K
+		for n = 1:N-2
+			vp[n+1] = (v[n+2]-v[n])*dxinv/2.0
+			vpp[n+1] = (-2*v[n+1] + v[n+2] + v[n])*dx2inv
+			parr[n] = parr[n]/(1 + vp[n+1]) - vpp[n+1]/(1 + vp[n+1])^2
+			p = parr[n]			
+			q = qarr[n] 			
+			dq = dqarr[n]
+			b[n] = p - q
+			if n < N-2
+				A[n, n+1] += dx2inv
+				A[n, n+1] += p*dxinv/2
+			end
+			if n > 1
+				A[n, n-1] += dx2inv
+				A[n, n-1] += -p*dxinv/2
+			end
+			A[n, n] = dq - 2.0*dx2inv
+
+		end
+		vint = A\b
+		v[2:N-1] .= vint
+		Tx .= x_gr .+ v
+	end
+	return Tx
 end
 
 w1, w2 = 0.5, 0.4
