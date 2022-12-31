@@ -72,7 +72,7 @@ function transport_by_kam(N,K,r,mref,sref,m,s,w,nm)
 	vp = zeros(N)
 	vpp = zeros(N)
 	Tx = zeros(N)
-
+	x_temp = zeros(N-2)
 	for n = 1:N-2
 		parr[n] = source_score(x[n], mref, sref)
 		qarr[n] = target_score(x[n],m,s,w,nm)
@@ -83,11 +83,12 @@ function transport_by_kam(N,K,r,mref,sref,m,s,w,nm)
 			vp[n+1] = (v[n+2]-v[n])*dxinv/2.0
 			vpp[n+1] = (-2*v[n+1] + v[n+2] + v[n])*dx2inv
 			parr[n] = parr[n]/(1 + vp[n+1]) - vpp[n+1]/(1 + vp[n+1])^2
+			x_temp[n] = x_gr[n+1] + v[n+1]
 		end
-		order = sortperm(x)
-		x = x[order]
+		order = sortperm(x_temp)
+		x_temp = x_temp[order]
 		parr = parr[order]
-		parr_int = linear_interpolation(x, parr)
+		parr_int = linear_interpolation(x_temp, parr)
 		v_int = linear_interpolation(x_gr, v)
 		x = x .+ v_int.(x)
 		for n = 1:N-2
@@ -108,9 +109,8 @@ function transport_by_kam(N,K,r,mref,sref,m,s,w,nm)
 		end
 		vint = A\b
 		v[2:N-1] .= vint
-		Tx .= x_gr .+ v
 	end
-	return Tx
+	return x
 end
 
 w1, w2 = 0.5, 0.4
