@@ -1,4 +1,5 @@
 using Test
+using LinearAlgebra
 function target_score(x, m, v, w, k)
 	prob = mixture_prob(x, m, v, w, k)
 	score = 0.0
@@ -49,6 +50,39 @@ function test_dtarget_score(x,m,v,w,k)
 	@show "d scores from fd, analytical", dscore_fd, dscore
 	@test dscore_fd ≈ dscore atol=1.e-8
 end
+function solve_newton_step(N,r,mref,vref,m,v,w,k)
+	x_gr = LinRange(-r,r,N+1)
+	dx = x_gr[2] - x_gr[1]
+	x_gr = x_gr[1:N]
+	x_gr .+= dx/2
+
+	dxinv = 1/dx
+	dx2inv = dxinv*dxinv
+
+	A = (-2.0*dx2inv)*I(N-2)
+	b = zeros(N-2)
+	x = x_gr[2:N-1]
+	for n = 1:N-2
+		p = source_score(x[n], mref, vref)
+		q = target_score(x[n],m,v,w,k)
+		dq = dtarget_score(x[n],m,v,w,k)
+
+		b[n] = p - q
+		if n < N-1
+			A[n, n+1] += dx2inv
+			A[n, n+1] += p*dxinv/2
+		end
+		if n > 1
+			A[n, n-1] += dx2inv
+			A[n, n-1] += -p*dxinv/2
+		end
+		A[n, n] += dq
+	end
+	vint = A\b
+	v = zeros(N)
+	v[2:N-1] .= vint
+	return v
+end
 
 w1, w2 = 0.5, 0.4
 w3 = 1 - (w1 + w2)
@@ -58,7 +92,4 @@ w = [w1, w2, w3]
 m = [m1, m2, m3]
 v = [v1, v2, v3]
 x = rand()
-@show "Score of a gaussian at x = ", x, " is ", source_score(x, m1, v1)
-@show "Score of a gaussian at x = ", x, " is ", target_score(x, m, v, w, 3)
-
 
