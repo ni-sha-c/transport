@@ -4,7 +4,7 @@ using Interpolations
 using PyPlot
 using Printf
 function target_score(x, m, s, w, k)
-	return -6.0
+	#return -6.0
 	prob = mixture_prob(x, m, s, w, k)
 	score = 0.0
 	for n = 1:k
@@ -25,12 +25,11 @@ function mixture_prob(x, m, s, w, k)
 	return prob
 end
 function source_score(x, m, s)
-	#return -(x-m)/s/s
+	return -(x-m)/s/s
 	#return 0.0
-	return -6.0
 end
 function dtarget_score(x, m, s, w, k)
-	return 8.0
+	#return 8.0
 	prob = mixture_prob(x,m,s,w,k)
 	score = target_score(x,m,s,w,k)
 	dscore = 0.0
@@ -56,6 +55,93 @@ function test_dtarget_score(x,m,s,w,k)
 	dscore= dtarget_score(x,m,s,w,k)
 	@show "d scores from fd, analytical", dscore_fd, dscore
 	@test dscore_fd ≈ dscore atol=1.e-8
+end
+function transport_by_kam_fd(N,K,r,mref,sref,m,s,w,nm,v0,vn)
+	x_gr = Array(LinRange(-r,r,N+1))
+	dx = x_gr[2] - x_gr[1]
+		
+	x_gr = x_gr .+ dx/2
+	x_gr = x_gr[1:N]	
+	x = x_gr[2:N-1]
+	Tx = zeros(N)
+
+	dxinv = 1/dx
+	dx2inv = dxinv*dxinv
+
+	A = zeros(N-2,N-2)	
+	b = zeros(N-2)
+	parr = zeros(N-2)
+	qarr = zeros(N-2)
+	dqarr = zeros(N-2)
+	v = zeros(N)
+	v[1] = v0
+	v[N] = vn
+	vp = zeros(N)
+	vpp = zeros(N)
+	Tx = zeros(N)
+	x_temp = zeros(N-2)
+	for n = 1:N-2
+		parr[n] = source_score(x[n], mref, sref)
+		qarr[n] = target_score(x[n],m,s,w,nm)
+		dqarr[n] = dtarget_score(x[n],m,s,w,nm)
+	end
+	for k = 1:K
+		for n = 1:N-2
+			vp[n+1] = (v[n+2]-v[n])*dxinv/2.0
+			vpp[n+1] = (-2*v[n+1] + v[n+2] + v[n])*dx2inv
+			parr[n] = parr[n]/(1 + vp[n+1]) - vpp[n+1]/(1 + vp[n+1])^2
+			x_temp[n] = x_gr[n+1] + v[n+1]
+		end
+		order = sortperm(x_temp)
+		x_temp = x_temp[order]
+		parr = parr[order]
+		parr_int = linear_interpolation(x_temp, parr,extrapolation_bc=Line())
+		v_int = linear_interpolation(x_gr, v, extrapolation_bc=Line())
+		x = x .+ v_int.(x)
+		for n = 1:N-2
+			p = parr_int(x_gr[n+1])			
+			q = qarr[n] 			
+			dq = dqarr[n]
+			b[n] = p - q
+			if n < N-2
+				A[n, n+1] += dx2inv + p*dxinv/2
+			end
+			if n > 1
+				A[n, n-1] += dx2inv -p*dxinv/2
+			end
+			if n == 1
+				b[n] -= (v0*dx2inv + p/2*dxinv*v0)
+			end
+			if n == N-2
+				b[n] -= (vn*dx2inv - p/2*dxinv*vn)
+			end
+			A[n, n] = dq - 2.0*dx2inv
+		end
+		vint = A\b
+		v[2:N-1] .= vint
+		@printf "At k= %d, ||v|| = %f \n" k norm(v)
+	end
+	return x
+end
+function sample_target(N, m, s, w, K)
+	x = zeros(N)
+	order = sortperm(w)
+	w = w[order]
+	m = m[order]
+	s = s[order]
+	c = K
+	for n = 1:N
+		u = rand()
+		c = K
+		for k = 1:K
+			if u < w[k]
+				c = k
+				break
+			end
+		end
+		x[n] = m[c] + s[c]*randn()
+	end
+	return x
 end
 function transport_by_kam(N,K,r,mref,sref,m,s,w,nm,v0,vn)
 	x_gr = Array(LinRange(-r,r,N+1))
@@ -105,12 +191,10 @@ function transport_by_kam(N,K,r,mref,sref,m,s,w,nm,v0,vn)
 			dq = dqarr[n]
 			b[n] = p - q
 			if n < N-2
-				A[n, n+1] += dx2inv
-				A[n, n+1] += p*dxinv/2
+				A[n, n+1] += dx2inv + p*dxinv/2
 			end
 			if n > 1
-				A[n, n-1] += dx2inv
-				A[n, n-1] += -p*dxinv/2
+				A[n, n-1] += dx2inv -p*dxinv/2
 			end
 			if n == 1
 				b[n] -= (v0*dx2inv + p/2*dxinv*v0)
@@ -119,51 +203,36 @@ function transport_by_kam(N,K,r,mref,sref,m,s,w,nm,v0,vn)
 				b[n] -= (vn*dx2inv - p/2*dxinv*vn)
 			end
 			A[n, n] = dq - 2.0*dx2inv
-
 		end
 		vint = A\b
 		v[2:N-1] .= vint
 		@printf "At k= %d, ||v|| = %f \n" k norm(v)
 	end
-	return v
-end
-function sample_target(N, m, s, w, K)
-	x = zeros(N)
-	order = sortperm(w)
-	w = w[order]
-	m = m[order]
-	s = s[order]
-	c = K
-	for n = 1:N
-		u = rand()
-		c = K
-		for k = 1:K
-			if u < w[k]
-				c = k
-				break
-			end
-		end
-		x[n] = m[c] + s[c]*randn()
-	end
 	return x
 end
-w1, w2 = 0.5, 0.4
+
+w1, w2 = 0.5, 0.5
 w3 = 1 - (w1 + w2)
-m1, m2, m3 = 0.0, 1.0, 2.0
-s1, s2, s3 = 1.0, 0.5, 2.0
+m1, m2, m3 = 0.0, 3.0, 2.0
+s1, s2, s3 = 1.0, 0.1, 0.1
 w = [w1, w2, w3]
 m = [m1, m2, m3]
 s = [s1, s2, s3]
-#fig, ax = subplots()
-#ax.xaxis.set_tick_params(labelsize=30)
-#ax.yaxis.set_tick_params(labelsize=30)
+fig, ax = subplots()
+ax.xaxis.set_tick_params(labelsize=30)
+ax.yaxis.set_tick_params(labelsize=30)
 k = 3
-#x = sample_target(2000,m,s,w,k)
-#ax.hist(x,bins=100,density=true)
-#Tx = transport_by_kam(2000,3,10,1,1,m,s,w,k,0,0)
-#ax.hist(Tx,bins=100,density=true)
-r = 1
-M = 5000
+r = 3
+M = 10000
+K = 2
+v0 = 0.0
+vn = 0.0
+x = sample_target(2000,m,s,w,k)
+ax.hist(x,bins=100,density=true)
+Tx = transport_by_kam(M,K,r,1,1,m,s,w,k,v0,vn)
+ax.hist(Tx,bins=100,density=true)
+#=
+# Test the ode solver
 x_gr = Array(LinRange(-r,r,M))
 v0, vn = exp(-1)*exp(-1), exp(1)*exp(1)
 fig, ax = subplots()
@@ -174,3 +243,4 @@ Tx = transport_by_kam(M,1,r,1,1,m,s,w,k,v0,vn)
 ax.plot(x_gr, Tx, "^", label="Transport", ms=10)
 ax.legend(fontsize=30)
 @show norm(Tx - exp.(2*x_gr))
+=#
