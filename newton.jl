@@ -63,7 +63,6 @@ function transport_by_kam_fd(N,K,r,mref,sref,m,s,w,nm,v0,vn)
 	x_gr = x_gr .+ dx/2
 	x_gr = x_gr[1:N]	
 	x = x_gr[2:N-1]
-	Tx = zeros(N)
 
 	dxinv = 1/dx
 	dx2inv = dxinv*dxinv
@@ -143,29 +142,65 @@ function sample_target(N, m, s, w, K)
 	end
 	return x
 end
+function cheb_pts(N)
+	x = zeros(N+1)
+	for j = 1:N+1
+		x[j] = cos((j-1)*π/N)	
+	end
+	return x
+end
+function cheb_diff(N)
+	x = cheb_pts(N)
+	D = zeros(N+1,N+1)
+	for j = 2:N 
+		xj = x[j]
+		D[j,j] = -xj/2/(1-xj^2)
+		for i = 2:N
+			if !(i==j)
+				xij = (-1)^(i+j)/(x[i] - xj)
+				D[i,j] = xij
+			end
+		end
+	end
+	i = 1
+	for j = 2:N
+		xj = x[j]
+		ij =  2.0*(-1)^(i+j)
+		D[i, j] = ij/(1-xj)
+		D[i+N, j] = -(-1)^N*ij/(1+xj)
+	end
+	j = 1
+	for i = 2:N
+		xi = x[i]
+		ij =  (-1)^(i+j)/2.0
+		D[i, j] = ij/(xi - 1)
+		D[i, j+N] = (-1)^N*ij/(xi+1)
+	end
+	D[1,N+1] = (-1)^N/2
+	D[N+1,1] = -(-1)^N/2
+
+
+	nsqby6 = (2*N*N + 1)/6
+	D[1,1] = nsqby6
+	D[N+1, N+1] = -nsqby6
+
+	return D
+end
 function transport_by_kam(N,K,r,mref,sref,m,s,w,nm,v0,vn)
-	x_gr = Array(LinRange(-r,r,N+1))
-	dx = x_gr[2] - x_gr[1]
-		
-	x_gr = x_gr .+ dx/2
-	x_gr = x_gr[1:N]	
-	x = x_gr[2:N-1]
+	x_gr = cheb_pts(N+1)
+	x = x_gr[2:N+1]
 	Tx = zeros(N)
 
-	dxinv = 1/dx
-	dx2inv = dxinv*dxinv
-
-	A = zeros(N-2,N-2)	
-	b = zeros(N-2)
-	parr = zeros(N-2)
-	qarr = zeros(N-2)
-	dqarr = zeros(N-2)
-	v = zeros(N)
+	A = zeros(N,N)	
+	b = zeros(N)
+	parr = zeros(N)
+	qarr = zeros(N)
+	dqarr = zeros(N)
+	v = zeros(N+2)
 	v[1] = v0
-	v[N] = vn
+	v[N+2] = vn
 	vp = zeros(N)
 	vpp = zeros(N)
-	Tx = zeros(N)
 	x_temp = zeros(N-2)
 	for n = 1:N-2
 		parr[n] = source_score(x[n], mref, sref)
@@ -228,9 +263,11 @@ K = 2
 v0 = 0.0
 vn = 0.0
 x = sample_target(2000,m,s,w,k)
+#=
 ax.hist(x,bins=100,density=true)
-Tx = transport_by_kam(M,K,r,1,1,m,s,w,k,v0,vn)
+Tx = transport_by_kam_fd(M,K,r,1,1,m,s,w,k,v0,vn)
 ax.hist(Tx,bins=100,density=true)
+=#
 #=
 # Test the ode solver
 x_gr = Array(LinRange(-r,r,M))
