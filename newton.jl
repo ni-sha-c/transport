@@ -3,6 +3,7 @@ using LinearAlgebra
 using Interpolations
 using PyPlot
 using Printf
+using Polynomials
 function target_score(x, m, s, w, k)
 	#return -6.0
 	prob = mixture_prob(x, m, s, w, k)
@@ -188,7 +189,7 @@ function cheb_diff(N)
 end
 function transport_by_kam(N,K,r,mref,sref,m,s,w,nm,v0,vn)
 	x_gr = cheb_pts(N+1)
-	x = x_gr[2:N+1]
+	x = -r .+ 2*r*rand(10*N)
 	Tx = zeros(N)
 
 	A = zeros(N,N)	
@@ -207,40 +208,34 @@ function transport_by_kam(N,K,r,mref,sref,m,s,w,nm,v0,vn)
 		qarr[n] = target_score(x[n],m,s,w,nm)
 		dqarr[n] = dtarget_score(x[n],m,s,w,nm)
 	end
+	D_big = cheb_diff(N+1)
+	D2_big = D_big*D_big
+	D = D_big[2:(N+1),2:(N+1)]
+	D2 = D2_big[2:(N+1),2:(N+1)]
 	for k = 1:K
+		vp = D_big*v
+		vpp = D2_big*v
 		for n = 1:N-2
-			vp[n+1] = (v[n+2]-v[n])*dxinv/2.0
-			vpp[n+1] = (-2*v[n+1] + v[n+2] + v[n])*dx2inv
 			parr[n] = parr[n]/(1 + vp[n+1]) - vpp[n+1]/(1 + vp[n+1])^2
 			x_temp[n] = x_gr[n+1] + v[n+1]
 		end
 		order = sortperm(x_temp)
 		x_temp = x_temp[order]
-		parr = parr[order]
-		parr_int = linear_interpolation(x_temp, parr,extrapolation_bc=Line())
-		v_int = linear_interpolation(x_gr, v, extrapolation_bc=Line())
-		x = x .+ v_int.(x)
-		for n = 1:N-2
-			p = parr_int(x_gr[n+1])			
+		parr .= parr[order]
+		p_int = linear_interpolation(x_temp, parr,extrapolation_bc=Line())
+		v_int = Polynomials.polyfitA(x_gr,v)
+		x .= x .+ v_int.(x)
+		parr .= parr_int.(x_gr[2:(N+1)]) 
+		A = D2  
+		for n = 1:N
+			p = parr[n]
 			q = qarr[n] 			
 			dq = dqarr[n]
 			b[n] = p - q
-			if n < N-2
-				A[n, n+1] += dx2inv + p*dxinv/2
-			end
-			if n > 1
-				A[n, n-1] += dx2inv -p*dxinv/2
-			end
-			if n == 1
-				b[n] -= (v0*dx2inv + p/2*dxinv*v0)
-			end
-			if n == N-2
-				b[n] -= (vn*dx2inv - p/2*dxinv*vn)
-			end
-			A[n, n] = dq - 2.0*dx2inv
+			A[n,:] .+= (p.*D[n,:] .+ dq)
 		end
 		vint = A\b
-		v[2:N-1] .= vint
+		v[2:(N+1)] .= vint
 		@printf "At k= %d, ||v|| = %f \n" k norm(v)
 	end
 	return x
@@ -248,8 +243,8 @@ end
 
 w1, w2 = 0.5, 0.5
 w3 = 1 - (w1 + w2)
-m1, m2, m3 = 0.0, 3.0, 2.0
-s1, s2, s3 = 1.0, 0.1, 0.1
+m1, m2, m3 = -0.5, 0.5, 2.0
+s1, s2, s3 = 0.1, 0.1, 0.1
 w = [w1, w2, w3]
 m = [m1, m2, m3]
 s = [s1, s2, s3]
@@ -257,17 +252,17 @@ fig, ax = subplots()
 ax.xaxis.set_tick_params(labelsize=30)
 ax.yaxis.set_tick_params(labelsize=30)
 k = 3
-r = 3
-M = 10000
+r = 2
+M = 1000
 K = 2
 v0 = 0.0
 vn = 0.0
 x = sample_target(2000,m,s,w,k)
-#=
+
 ax.hist(x,bins=100,density=true)
-Tx = transport_by_kam_fd(M,K,r,1,1,m,s,w,k,v0,vn)
+Tx = transport_by_kam(M,K,r,1,1,m,s,w,k,v0,vn)
 ax.hist(Tx,bins=100,density=true)
-=#
+
 #=
 # Test the ode solver
 x_gr = Array(LinRange(-r,r,M))
