@@ -189,7 +189,7 @@ function cheb_diff(N)
 end
 function transport_by_kam(N,K,r,mref,sref,m,s,w,nm,v0,vn)
 	x_gr = cheb_pts(N+1)
-	x = -r .+ 2*r*rand(10*N)
+	x = mref .+ sref.*randn(50*N)
 	Tx = zeros(N)
 
 	A = zeros(N,N)	
@@ -200,22 +200,22 @@ function transport_by_kam(N,K,r,mref,sref,m,s,w,nm,v0,vn)
 	v = zeros(N+2)
 	v[1] = v0
 	v[N+2] = vn
-	vp = zeros(N)
-	vpp = zeros(N)
-	x_temp = zeros(N-2)
-	for n = 1:N-2
-		parr[n] = source_score(x[n], mref, sref)
-		qarr[n] = target_score(x[n],m,s,w,nm)
-		dqarr[n] = dtarget_score(x[n],m,s,w,nm)
+	vp = zeros(N+2)
+	vpp = zeros(N+2)
+	x_temp = zeros(N)
+	for n = 1:N
+		parr[n] = source_score(x_gr[n+1], mref, sref)
+		qarr[n] = target_score(x_gr[n+1],m,s,w,nm)
+		dqarr[n] = dtarget_score(x_gr[n+1],m,s,w,nm)
 	end
 	D_big = cheb_diff(N+1)
 	D2_big = D_big*D_big
 	D = D_big[2:(N+1),2:(N+1)]
 	D2 = D2_big[2:(N+1),2:(N+1)]
 	for k = 1:K
-		vp = D_big*v
-		vpp = D2_big*v
-		for n = 1:N-2
+		vp .= D_big*v
+		vpp .= D2_big*v
+		for n = 1:N
 			parr[n] = parr[n]/(1 + vp[n+1]) - vpp[n+1]/(1 + vp[n+1])^2
 			x_temp[n] = x_gr[n+1] + v[n+1]
 		end
@@ -223,22 +223,28 @@ function transport_by_kam(N,K,r,mref,sref,m,s,w,nm,v0,vn)
 		x_temp = x_temp[order]
 		parr .= parr[order]
 		p_int = linear_interpolation(x_temp, parr,extrapolation_bc=Line())
-		v_int = Polynomials.polyfitA(x_gr,v)
+		v_int = Polynomials.polyfitA(x_gr,v,2)
+		#v_coeff = Polynomials.coeffs(v_int)
 		x .= x .+ v_int.(x)
-		parr .= parr_int.(x_gr[2:(N+1)]) 
+		@printf "x_max = %f and x_min = %f" maximum(x) minimum(x)
+		#parr .= p_int.(x_gr[2:(N+1)]) 
+		parr .= -6.0
 		A = D2  
 		for n = 1:N
 			p = parr[n]
 			q = qarr[n] 			
-			dq = dqarr[n]
-			b[n] = p - q
-			A[n,:] .+= (p.*D[n,:] .+ dq)
+			#dq = dqarr[n]
+			dq = 8.0
+			#b[n] = p - q
+			A[n,:] .+= p.*D[n,:]
+			A[n,n] += dq
+			b[n] -= (D2_big[n+1,1]*v0 + D2_big[n+1,end]*vn + p*D_big[n+1,1]*v0 +  p*D_big[n+1,end]*vn) 
 		end
 		vint = A\b
 		v[2:(N+1)] .= vint
 		@printf "At k= %d, ||v|| = %f \n" k norm(v)
 	end
-	return x
+	return v
 end
 
 w1, w2 = 0.5, 0.5
@@ -248,31 +254,33 @@ s1, s2, s3 = 0.1, 0.1, 0.1
 w = [w1, w2, w3]
 m = [m1, m2, m3]
 s = [s1, s2, s3]
-fig, ax = subplots()
-ax.xaxis.set_tick_params(labelsize=30)
-ax.yaxis.set_tick_params(labelsize=30)
+
+#fig, ax = subplots()
+#ax.xaxis.set_tick_params(labelsize=30)
+#ax.yaxis.set_tick_params(labelsize=30)
 k = 3
-r = 2
-M = 1000
+r = 1
+M = 50
 K = 2
-v0 = 0.0
-vn = 0.0
-x = sample_target(2000,m,s,w,k)
+#v0 = 0.0
+#vn = 0.0
+#x = sample_target(2000,m,s,w,k)
 
-ax.hist(x,bins=100,density=true)
-Tx = transport_by_kam(M,K,r,1,1,m,s,w,k,v0,vn)
-ax.hist(Tx,bins=100,density=true)
+#ax.hist(x,bins=100,density=true)
+#Tx = transport_by_kam(M,K,r,1,1,m,s,w,k,v0,vn)
+#ax.hist(Tx,bins=100,density=true)
 
-#=
+
 # Test the ode solver
 x_gr = Array(LinRange(-r,r,M))
-v0, vn = exp(-1)*exp(-1), exp(1)*exp(1)
+v0, vn = exp(2), exp(-2)
 fig, ax = subplots()
 ax.xaxis.set_tick_params(labelsize=30)
 ax.yaxis.set_tick_params(labelsize=30)
 ax.plot(x_gr, exp.(2*x_gr), ".", label="Analytical", ms=10)
 Tx = transport_by_kam(M,1,r,1,1,m,s,w,k,v0,vn)
-ax.plot(x_gr, Tx, "^", label="Transport", ms=10)
+x_cheb = cheb_pts(M+1)
+ax.plot(x_cheb, Tx, "^", label="Transport", ms=10)
 ax.legend(fontsize=30)
-@show norm(Tx - exp.(2*x_gr))
-=#
+#@show norm(Tx - exp.(2*x_gr))
+
