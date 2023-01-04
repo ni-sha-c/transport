@@ -192,64 +192,62 @@ function cheb_diff(N)
 	return D
 end
 function transport_by_kam(N,K,r,mref,sref,m,s,w,nm,v0,vn)
-	x_gr = cheb_pts(N+1)
+	x_gr = cheb_pts(N-1)
 	x = mref .+ sref.*randn(50*N)
 	#x = -r .+ 2*r*rand(50*N)
 	Tinvx = copy(x)
-	Tx = zeros(N)
 
-	A = zeros(N,N)	
+	A = zeros(N, N)	
 	b = zeros(N)
 	parr = zeros(N)
 	qarr = zeros(N)
 	dqarr = zeros(N)
-	v = zeros(N+2)
+	v = zeros(N)
 	v[1] = v0
-	v[N+2] = vn
-	vp = zeros(N+2)
-	vpp = zeros(N+2)
+	v[N] = vn
+	vp = zeros(N)
+	vpp = zeros(N)
 	x_temp = zeros(N)
 	for n = 1:N
-		parr[n] = source_score(x_gr[n+1], mref, sref)
-		qarr[n] = target_score(x_gr[n+1],m,s,w,nm)
-		dqarr[n] = dtarget_score(x_gr[n+1],m,s,w,nm)
+		parr[n] = source_score(x_gr[n], mref, sref)
+		qarr[n] = target_score(x_gr[n],m,s,w,nm)
+		dqarr[n] = dtarget_score(x_gr[n],m,s,w,nm)
 	end
-	D_big = cheb_diff(N+1)
-	D2_big = D_big*D_big
-	D = D_big[2:(N+1),2:(N+1)]
-	D2 = D2_big[2:(N+1),2:(N+1)]
+	D = cheb_diff(N-1)
+	D2 = D*D
+	#D = D_big[2:(N+1),2:(N+1)]
+	#D2 = D2_big[2:(N+1),2:(N+1)]
 	for k = 1:K
-		vp .= D_big*v
-		vpp .= D2_big*v
+		vp .= D*v
+		vpp .= D2*v
 		for n = 1:N
-			parr[n] = parr[n]/(1 + vp[n+1]) - vpp[n+1]/(1 + vp[n+1])^2
-			x_temp[n] = x_gr[n+1] + v[n+1]
+			parr[n] = parr[n]/(1 + vp[n]) - vpp[n]/(1 + vp[n])^2
+			x_temp[n] = x_gr[n] + v[n]
 		end
 		order = sortperm(x_temp)
 		x_temp = x_temp[order]
 		parr .= parr[order]
-		p_int = linear_interpolation(x_temp, parr,extrapolation_bc=Line())
-		v_int = Polynomials.polyfitA(x_gr,v,2)
+		p_int = linear_interpolation(x_temp,parr,extrapolation_bc=Line())
+		v_int = Polynomials.polyfitA(x_gr,v,1)
 		#v_coeff = Polynomials.coeffs(v_int)
 		x .= x .+ v_int.(x)
 		@printf "x_max = %f and x_min = %f" maximum(x) minimum(x)
-		parr .= p_int.(x_gr[2:(N+1)]) 
+		parr .= p_int.(x_gr) 
 		A .= D2  
-		for n = 1:N
+		for n = 2:(N-1)
 			p = parr[n]
 			q = qarr[n] 			
 			dq = dqarr[n]
 			b[n] = p - q
 			A[n,:] .+= p.*D[n,:]
-			A[n,n] += dq
-			b[n] -= (D2_big[n+1,1]*v0 + D2_big[n+1,end]*vn + p*D_big[n+1,1]*v0 +  p*D_big[n+1,end]*vn) 
+			A[n,n] += dq	
 		end
 		#@show "max b", maximum(b), "min b", minimum(b)
 		vint = A\b
-		v[2:(N+1)] .= vint
+		v .= vint
 		@printf "At k= %d, ||v|| = %f \n" k norm(v)
 	end
-	return Tinv, x
+	return Tinvx, x
 end
 
 w1, w2 = 1.0, 0
@@ -265,14 +263,21 @@ ax.xaxis.set_tick_params(labelsize=20)
 ax.yaxis.set_tick_params(labelsize=20)
 k = 3
 r = -1
-M = 500
-K = 2
+M = 64
+K = 10
 v0 = 0.0
 vn = 0.0
 x_t = sample_target(10000,m,s,w,k)
+m_s = -0.5
+s_s = 1.0
+m_t = m[1]
+s_t = s[1]
+a = s_t/s_s
+b = m_t - a*m_s
+
 
 ax.hist(x_t,bins=200,density=true,label="Target")
-x, Tx = transport_by_kam(M,K,r,-0.5,1.0,m,s,w,k,v0,vn)
+x, Tx = transport_by_kam(M,K,r,m_s,s_s,m,s,w,k,v0,vn)
 ax.hist(Tx,bins=200,density=true,label="KAM")
 ax.legend(fontsize=20)
 ax.set_xlabel("x",fontsize=20)
@@ -280,7 +285,8 @@ ax.set_title("Density",fontsize=20)
 tight_layout()
 
 fig, ax = subplots()
-ax.plot(x, Tx, ".", ms=5, label="Computed T(x)")
+ax.plot(x, Tx, ".", ms=5, label="KAM-Cheb")
+ax.plot(x, a.*x .+ b, "P", ms=5, label="Analytical")
 ax.set_xlabel("x", fontsize=20)
 ax.xaxis.set_tick_params(labelsize=20)
 ax.yaxis.set_tick_params(labelsize=20)
