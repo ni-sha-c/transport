@@ -9,7 +9,7 @@ function target_score(x, m, s, w, k)
 	prob = mixture_prob(x, m, s, w, k)
 	score = 0.0
 	for n = 1:k
-			score -= w[n]*gaussian(x,m[n],s[n])*(x-m[n])/s[n]/s[n]
+		score -= w[n]*gaussian(x,m[n],s[n])*(x-m[n])/s[n]/s[n]
 	end
 	score = 1/prob*score
 end
@@ -63,7 +63,8 @@ function transport_by_kam_fd(N,K,r,mref,sref,m,s,w,nm,v0,vn)
 		
 	x_gr = x_gr .+ dx/2
 	x_gr = x_gr[1:N]	
-	x = x_gr[2:N-1]
+	x = mref .+ sref*randn(N)
+	Tinvx = copy(x)
 
 	dxinv = 1/dx
 	dx2inv = dxinv*dxinv
@@ -81,9 +82,9 @@ function transport_by_kam_fd(N,K,r,mref,sref,m,s,w,nm,v0,vn)
 	Tx = zeros(N)
 	x_temp = zeros(N-2)
 	for n = 1:N-2
-		parr[n] = source_score(x[n], mref, sref)
-		qarr[n] = target_score(x[n],m,s,w,nm)
-		dqarr[n] = dtarget_score(x[n],m,s,w,nm)
+		parr[n] = source_score(x_gr[n+1], mref, sref)
+		qarr[n] = target_score(x_gr[n+1],m,s,w,nm)
+		dqarr[n] = dtarget_score(x_gr[n+1],m,s,w,nm)
 	end
 	for k = 1:K
 		for n = 1:N-2
@@ -96,6 +97,8 @@ function transport_by_kam_fd(N,K,r,mref,sref,m,s,w,nm,v0,vn)
 		x_temp = x_temp[order]
 		parr = parr[order]
 		parr_int = linear_interpolation(x_temp, parr,extrapolation_bc=Line())
+		
+		#v_int = Polynomials.polyfitA(x_gr,v,2)
 		v_int = linear_interpolation(x_gr, v, extrapolation_bc=Line())
 		x = x .+ v_int.(x)
 		for n = 1:N-2
@@ -103,11 +106,12 @@ function transport_by_kam_fd(N,K,r,mref,sref,m,s,w,nm,v0,vn)
 			q = qarr[n] 			
 			dq = dqarr[n]
 			b[n] = p - q
+			@show p
 			if n < N-2
-				A[n, n+1] += dx2inv + p*dxinv/2
+					A[n, n+1] += (dx2inv + p*dxinv/2)
 			end
 			if n > 1
-				A[n, n-1] += dx2inv -p*dxinv/2
+					A[n, n-1] += (dx2inv -p*dxinv/2)
 			end
 			if n == 1
 				b[n] -= (v0*dx2inv + p/2*dxinv*v0)
@@ -121,7 +125,7 @@ function transport_by_kam_fd(N,K,r,mref,sref,m,s,w,nm,v0,vn)
 		v[2:N-1] .= vint
 		@printf "At k= %d, ||v|| = %f \n" k norm(v)
 	end
-	return x
+	return Tinvx, x
 end
 function sample_target(N, m, s, w, K)
 	x = zeros(N)
@@ -190,6 +194,8 @@ end
 function transport_by_kam(N,K,r,mref,sref,m,s,w,nm,v0,vn)
 	x_gr = cheb_pts(N+1)
 	x = mref .+ sref.*randn(50*N)
+	#x = -r .+ 2*r*rand(50*N)
+	Tinvx = copy(x)
 	Tx = zeros(N)
 
 	A = zeros(N,N)	
@@ -227,51 +233,63 @@ function transport_by_kam(N,K,r,mref,sref,m,s,w,nm,v0,vn)
 		#v_coeff = Polynomials.coeffs(v_int)
 		x .= x .+ v_int.(x)
 		@printf "x_max = %f and x_min = %f" maximum(x) minimum(x)
-		#parr .= p_int.(x_gr[2:(N+1)]) 
-		parr .= -6.0
-		A = D2  
+		parr .= p_int.(x_gr[2:(N+1)]) 
+		A .= D2  
 		for n = 1:N
 			p = parr[n]
 			q = qarr[n] 			
-			#dq = dqarr[n]
-			dq = 8.0
-			#b[n] = p - q
+			dq = dqarr[n]
+			b[n] = p - q
 			A[n,:] .+= p.*D[n,:]
 			A[n,n] += dq
 			b[n] -= (D2_big[n+1,1]*v0 + D2_big[n+1,end]*vn + p*D_big[n+1,1]*v0 +  p*D_big[n+1,end]*vn) 
 		end
+		#@show "max b", maximum(b), "min b", minimum(b)
 		vint = A\b
 		v[2:(N+1)] .= vint
 		@printf "At k= %d, ||v|| = %f \n" k norm(v)
 	end
-	return v
+	return Tinv, x
 end
 
-w1, w2 = 0.5, 0.5
+w1, w2 = 1.0, 0
 w3 = 1 - (w1 + w2)
 m1, m2, m3 = -0.5, 0.5, 2.0
-s1, s2, s3 = 0.1, 0.1, 0.1
+s1, s2, s3 = 0.4, 0.4, 0.1
 w = [w1, w2, w3]
 m = [m1, m2, m3]
 s = [s1, s2, s3]
 
-#fig, ax = subplots()
-#ax.xaxis.set_tick_params(labelsize=30)
-#ax.yaxis.set_tick_params(labelsize=30)
+fig, ax = subplots()
+ax.xaxis.set_tick_params(labelsize=20)
+ax.yaxis.set_tick_params(labelsize=20)
 k = 3
-r = 1
-M = 50
+r = -1
+M = 500
 K = 2
-#v0 = 0.0
-#vn = 0.0
-#x = sample_target(2000,m,s,w,k)
+v0 = 0.0
+vn = 0.0
+x_t = sample_target(10000,m,s,w,k)
 
-#ax.hist(x,bins=100,density=true)
-#Tx = transport_by_kam(M,K,r,1,1,m,s,w,k,v0,vn)
-#ax.hist(Tx,bins=100,density=true)
+ax.hist(x_t,bins=200,density=true,label="Target")
+x, Tx = transport_by_kam(M,K,r,-0.5,1.0,m,s,w,k,v0,vn)
+ax.hist(Tx,bins=200,density=true,label="KAM")
+ax.legend(fontsize=20)
+ax.set_xlabel("x",fontsize=20)
+ax.set_title("Density",fontsize=20)
+tight_layout()
 
+fig, ax = subplots()
+ax.plot(x, Tx, ".", ms=5, label="Computed T(x)")
+ax.set_xlabel("x", fontsize=20)
+ax.xaxis.set_tick_params(labelsize=20)
+ax.yaxis.set_tick_params(labelsize=20)
+ax.legend(fontsize=20)
+ax.grid(true)
+tight_layout()
 
 # Test the ode solver
+#=
 x_gr = Array(LinRange(-r,r,M))
 v0, vn = exp(2), exp(-2)
 fig, ax = subplots()
@@ -283,4 +301,4 @@ x_cheb = cheb_pts(M+1)
 ax.plot(x_cheb, Tx, "^", label="Transport", ms=10)
 ax.legend(fontsize=30)
 #@show norm(Tx - exp.(2*x_gr))
-
+=#
