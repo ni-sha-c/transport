@@ -263,6 +263,21 @@ function to_mixture(x,mref,sref,m,s,w,k)
 	end
 	return a*x + b
 end
+function kr_mixture(x,m_s,s_s,m,s,w,k)
+	st2 = sqrt(2)
+	cdfx = (1/2)*(1 + erf((x-m_s)/s_s/st2))
+	inv_cdf(x, mu, si) = mu + st2*si*erfinv(x-1)
+	wc = cumsum(w)
+	Tx = 0.0
+	for n = 1:k
+		if cdfx < wc[n]
+			Tx = inv_cdf(cdfx,m[n],s[n])
+			break
+		end
+	end
+	return Tx
+end
+
 w1, w2 = 0.5, 0.5
 w3 = 1 - (w1 + w2)
 m1, m2, m3 = -0.5, 0.5, 2.0
@@ -283,21 +298,17 @@ vn = 0.0
 x_t = sample_target(10000,m,s,w,k)
 #x_t = -1.0 .+ 2.0*rand(10000)
 m_s = 0
-s_s = 1/sqrt(2)
-m_t = m[1]
-s_t = s[1]
-a = s_t/s_s
-b = m_t - a*m_s
-
+s_s = 1
 
 ax.hist(x_t,bins=200,density=true,label="Target")
 x, Tx = transport_by_kam(M,K,r,m_s,s_s,m,s,w,k,v0,vn)
 N = size(x)[1]
 Tx_ana = zeros(N)
 for n = 1:N
-	Tx_ana[n] = to_mixture(x[n], 0, 1, m, s, w, k)
+	Tx_ana[n] = kr_mixture(x[n], m_s, s_s, m, s, w, k)
 end
 ax.hist(Tx,bins=200,density=true,label="KAM")
+ax.hist(Tx_ana,bins=200,density=true,label="KR Target")
 ax.legend(fontsize=20)
 ax.set_xlabel("x",fontsize=20)
 ax.set_title("Density",fontsize=20)
@@ -305,7 +316,7 @@ tight_layout()
 
 fig, ax = subplots()
 ax.plot(x, Tx, ".", ms=5, label="KAM-Cheb")
-ax.plot(x, , "P", ms=5, label="Analytical")
+ax.plot(x, Tx_ana, "P", ms=5, label="Analytical")
 ax.set_xlabel("x", fontsize=20)
 ax.xaxis.set_tick_params(labelsize=20)
 ax.yaxis.set_tick_params(labelsize=20)
