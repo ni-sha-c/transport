@@ -4,6 +4,7 @@ using Interpolations
 using PyPlot
 using Printf
 using Polynomials
+using SpecialFunctions
 function target_score(x, m, s, w, k)
 	#return -6.0
 	prob = mixture_prob(x, m, s, w, k)
@@ -228,7 +229,7 @@ function transport_by_kam(N,K,r,mref,sref,m,s,w,nm,v0,vn)
 		x_temp = x_temp[order]
 		parr .= parr[order]
 		p_int = linear_interpolation(x_temp,parr,extrapolation_bc=Line())
-		v_int = Polynomials.polyfitA(x_gr,v,1)
+		v_int = Polynomials.polyfitA(x_gr,v,2)
 		#v_coeff = Polynomials.coeffs(v_int)
 		x .= x .+ v_int.(x)
 		@printf "x_max = %f and x_min = %f" maximum(x) minimum(x)
@@ -249,11 +250,23 @@ function transport_by_kam(N,K,r,mref,sref,m,s,w,nm,v0,vn)
 	end
 	return Tinvx, x
 end
-
-w1, w2 = 1.0, 0
+function to_mixture(x,mref,sref,m,s,w,k)
+	u = rand()
+	wc = cumsum(w)
+	a, b = 1.0, 1.0
+	for n = 1:k
+		if u < wc[n] 
+				a = s[n]/sref
+			b = m[n] - mref*a
+			break
+		end
+	end
+	return a*x + b
+end
+w1, w2 = 0.5, 0.5
 w3 = 1 - (w1 + w2)
 m1, m2, m3 = -0.5, 0.5, 2.0
-s1, s2, s3 = 0.4, 0.4, 0.1
+s1, s2, s3 = 0.2, 0.2, 0.1
 w = [w1, w2, w3]
 m = [m1, m2, m3]
 s = [s1, s2, s3]
@@ -264,12 +277,13 @@ ax.yaxis.set_tick_params(labelsize=20)
 k = 3
 r = -1
 M = 64
-K = 10
+K = 2
 v0 = 0.0
 vn = 0.0
 x_t = sample_target(10000,m,s,w,k)
-m_s = -0.5
-s_s = 1.0
+#x_t = -1.0 .+ 2.0*rand(10000)
+m_s = 0
+s_s = 1/sqrt(2)
 m_t = m[1]
 s_t = s[1]
 a = s_t/s_s
@@ -278,6 +292,11 @@ b = m_t - a*m_s
 
 ax.hist(x_t,bins=200,density=true,label="Target")
 x, Tx = transport_by_kam(M,K,r,m_s,s_s,m,s,w,k,v0,vn)
+N = size(x)[1]
+Tx_ana = zeros(N)
+for n = 1:N
+	Tx_ana[n] = to_mixture(x[n], 0, 1, m, s, w, k)
+end
 ax.hist(Tx,bins=200,density=true,label="KAM")
 ax.legend(fontsize=20)
 ax.set_xlabel("x",fontsize=20)
@@ -286,7 +305,7 @@ tight_layout()
 
 fig, ax = subplots()
 ax.plot(x, Tx, ".", ms=5, label="KAM-Cheb")
-ax.plot(x, a.*x .+ b, "P", ms=5, label="Analytical")
+ax.plot(x, , "P", ms=5, label="Analytical")
 ax.set_xlabel("x", fontsize=20)
 ax.xaxis.set_tick_params(labelsize=20)
 ax.yaxis.set_tick_params(labelsize=20)
