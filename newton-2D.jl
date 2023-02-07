@@ -6,14 +6,30 @@ using Printf
 using Polynomials
 using SpecialFunctions
 using Distributions
-function target_score(x, m, s, w, k)
-	#return -6.0
-	prob = mixture_prob(x, m, s, w, k)
-	score = 0.0
-	for n = 1:k
-		score -= w[n]*gaussian(x,m[n],s[n])*(x-m[n])/s[n]/s[n]
-	end
-	score = 1/prob*score
+function score(x, y, μ, a, b, c, d)
+	mx, my = μ[1], μ[2]
+	A = a*(x - mx)
+	D = d*(y - my)
+	q1 = A + 0.5*(b+c)*(y-my)
+	q2 = D + 0.5*(b+c)*(x-mx)
+	return [-q1,-q2]
+end
+function test_score(x, y, μ, Σ)
+	Σinv = inv(Σ)
+	a, b, c, d = Σinv[1,1],Σinv[1,2],Σinv[2,1],Σinv[2,2]
+	q_ana = score(x,y,μ,a,b,c,d)
+	ϵ = 1.e-5
+	p = MvNormal(μ, Σ)
+	f(x,y) = log(pdf(p,[x,y]))
+	q_x = (f(x+ϵ,y) - f(x-ϵ,y))/2/ϵ
+	q_y = (f(x,y+ϵ) - f(x,y-ϵ))/2/ϵ
+	@test q_x ≈ q_ana[1] atol=1.e-8
+	@test q_y ≈ q_ana[2] atol=1.e-8
+
+end
+function target_score(x, y)
+	
+
 end
 function gaussian(x, m, s)
 	prob = (x-m)^2/2/s/s
@@ -278,61 +294,6 @@ function kr_mixture(x,m_s,s_s,m,s,w,k)
 	end
 	return Tx
 end
-function kr_two_mixture_general(x,m_s,s_s,m,s,w)
-	w1, w2 = w[1], w[2]
-	a = m[1] + 3*s[1]
-	st2 = sqrt(2)
-	cdf(x,mu,si) = (1/2)*(1 + erf((x-mu)/si/st2))
-	inv_cdf(x, mu, si) = mu + st2*si*erfinv(2*x-1)
-	w1cdf1a, w2cdf2a = w1*cdf(a,m[1],s[1]), w2*cdf(a,m[2],s[2])
-	Tx = 0.0
-	p = cdf(x,m_s,s_s)
-	if p <= w1cdf1a
-		b = p/w1
-		if b > 1
-			b = 1
-		end
-		Tx = inv_cdf(b, m[1], s[1])
-	else
-		b = (p-w1cdf1a+w2cdf2a)/w2
-		if b > 1
-			b = p - 1.e-6
-		end
-		if b < 0
-			b = 0
-		end
-		Tx = inv_cdf(b, m[2], s[2])
-	end
-	return Tx
-end
-
-function kr_two_mixture(x,m_s,s_s,m,s,w)
-	w1, w2 = w[1], w[2]
-	a = m[1] + 3*s[1]
-	st2 = sqrt(2)
-	cdf(x,mu,si) = (1/2)*(1 + erf((x-mu)/si/st2))
-	inv_cdf(x, mu, si) = mu + st2*si*erfinv(2*x-1)
-	w1cdf1a, w2cdf2a = w1*cdf(a,m[1],s[1]), w2*cdf(a,m[2],s[2])
-	Tx = 0.0
-	p = cdf(x,m_s,s_s)
-	if p <= w1cdf1a
-		b = p/w1
-		if b > 1
-			b = 1
-		end
-		Tx = inv_cdf(b, m[1], s[1])
-	else
-		b = (p-w1cdf1a+w2cdf2a)/w2
-		if b > 1
-			b = p - 1.e-6
-		end
-		if b < 0
-			b = 0
-		end
-		Tx = inv_cdf(b, m[2], s[2])
-	end
-	return Tx
-end
 #=
 w1, w2 = 0.5, 0.5
 w3 = 1 - (w1 + w2)
@@ -383,7 +344,10 @@ tight_layout()
 μ2 = [0.5, 0]
 Σ2 = [0.1  0;
      0 2]
+f1(x,y) = pdf(MvNormal(μ1, Σ1),[x,y])
+f2(x,y) = pdf(MvNormal(μ2, Σ2),[x,y])
 
+#=
 p1 = MvNormal(μ1, Σ1)
 p2 = MvNormal(μ2, Σ2)
 Nplot = 200
@@ -402,7 +366,7 @@ ax.contourf(X, Y, Z)
 ax.xaxis.set_tick_params(labelsize=20)
 ax.yaxis.set_tick_params(labelsize=20)
 ax.grid(true)
-#=
+
 fig, ax = subplots()
 ax.plot(x, Tx, ".", ms=5, label="KAM-Cheb")
 ax.plot(x, Tx_ana, "P", ms=5, label="Analytical")
