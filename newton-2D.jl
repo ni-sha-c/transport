@@ -311,6 +311,53 @@ function kr_mixture(x,m_s,s_s,m,s,w,k)
 	end
 	return Tx
 end
+function plot_2d_scalar_fun(fun)
+  Nplot = 100
+  X = range(-2, 2, length=Nplot)
+  Y = range(-2, 2, length=Nplot)
+  Z = zeros(Nplot, Nplot)
+  for i = 1:Nplot
+    for j = 1:Nplot
+		Z[i,j] = fun(X[j], Y[i])
+  	end
+  end
+
+  fig, ax = subplots()
+  ax.contourf(X, Y, Z)
+  ax.xaxis.set_tick_params(labelsize=20)
+  ax.yaxis.set_tick_params(labelsize=20)
+  ax.grid(true)
+end
+function plot_2d_vector_fun(fun)
+  Nplot = 100
+  X = range(-2, 2, length=Nplot)
+  Y = range(-2, 2, length=Nplot)
+  Z1 = zeros(Nplot, Nplot)
+  Z2 = zeros(Nplot, Nplot)
+  for i = 1:Nplot
+    for j = 1:Nplot
+	  f = fun(X[j], Y[i])
+	  Z1[i,j] = f[1]
+	  Z2[i,j] = f[2]
+  	end
+  end
+
+  fig, ax = subplots()
+  z1 = ax.contourf(X, Y, Z1)
+  ax.xaxis.set_tick_params(labelsize=20)
+  ax.yaxis.set_tick_params(labelsize=20)
+  ax.grid(true)
+  cbar = colorbar(z1, ax=ax)
+  cbar.ax.tick_params(labelsize=20)
+  fig, ax = subplots()
+  z2 = ax.contourf(X, Y, Z2)
+  ax.xaxis.set_tick_params(labelsize=20)
+  ax.yaxis.set_tick_params(labelsize=20)
+  ax.grid(true)
+  cbar = colorbar(z2, ax=ax)
+  cbar.ax.tick_params(labelsize=20)
+end
+
 #=
 w1, w2 = 0.5, 0.5
 w3 = 1 - (w1 + w2)
