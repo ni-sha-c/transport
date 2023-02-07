@@ -28,9 +28,26 @@ function test_score(x, y, μ, Σ)
 
 end
 function target_score(x, y)
-	
+	ρ1 = f1(x,y)
+	ρ2 = f2(x,y)
+	ρ = (ρ1 + ρ2)
+	w1, w2 = ρ1/ρ, ρ2/ρ
+	q1 = score(x, y, μ1, a1, b1, c1, d1) 
+	q2 = score(x, y, μ2, a2, b2, c2, d2) 
+	q = w1.*q1 .+ w2.*q2
+	return q
+end
+function test_target_score(x, y)
+	q_ana = target_score(x,y)
+	ϵ = 1.e-5
+	logf(x,y) = log(f(x,y))
+	q_x = (logf(x+ϵ,y) - logf(x-ϵ,y))/2/ϵ
+	q_y = (logf(x,y+ϵ) - logf(x,y-ϵ))/2/ϵ
+	@test q_x ≈ q_ana[1] atol=1.e-8
+	@test q_y ≈ q_ana[2] atol=1.e-8
 
 end
+
 function gaussian(x, m, s)
 	prob = (x-m)^2/2/s/s
 	prob = exp(-prob)
@@ -346,7 +363,13 @@ tight_layout()
      0 2]
 f1(x,y) = pdf(MvNormal(μ1, Σ1),[x,y])
 f2(x,y) = pdf(MvNormal(μ2, Σ2),[x,y])
-
+Σ1inv = inv(Σ1)
+Σ2inv = inv(Σ2)
+a1, b1, c1, d1 = Σ1inv[1,1], Σ1inv[1,2], Σ1inv[2,1], Σ1inv[2,2]
+a2, b2, c2, d2 = Σ2inv[1,1], Σ2inv[1,2], Σ2inv[2,1], Σ2inv[2,2]
+f(x,y) = 0.5*f1(x,y) + 0.5*f2(x,y)
+x, y = rand(), rand()
+test_target_score(x,y)
 #=
 p1 = MvNormal(μ1, Σ1)
 p2 = MvNormal(μ2, Σ2)
