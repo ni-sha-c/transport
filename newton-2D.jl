@@ -5,6 +5,7 @@ using PyPlot
 using Printf
 using Polynomials
 using SpecialFunctions
+using Distributions
 function target_score(x, m, s, w, k)
 	#return -6.0
 	prob = mixture_prob(x, m, s, w, k)
@@ -332,6 +333,7 @@ function kr_two_mixture(x,m_s,s_s,m,s,w)
 	end
 	return Tx
 end
+#=
 w1, w2 = 0.5, 0.5
 w3 = 1 - (w1 + w2)
 m1, m2, m3 = -0.5, 0.5, 2.0
@@ -374,7 +376,33 @@ ax.legend(fontsize=20)
 ax.set_xlabel("x",fontsize=20)
 ax.set_title("Density",fontsize=20)
 tight_layout()
+=#
+μ1 = [-0.5, 0]
+Σ1 = [1  0.01;
+     0.01 0.1]
+μ2 = [0.5, 0]
+Σ2 = [0.1  0;
+     0 2]
 
+p1 = MvNormal(μ1, Σ1)
+p2 = MvNormal(μ2, Σ2)
+Nplot = 200
+X = range(-2, 2, length=Nplot)
+Y = range(-2, 2, length=Nplot)
+f1(x,y) = pdf(p1, [x,y])
+f2(x,y) = pdf(p2, [x,y])
+Z = zeros(Nplot, Nplot)
+for i = 1:Nplot
+  for j = 1:Nplot
+    Z[i,j] = 0.5*(f1(X[j], Y[i]) + f2(X[j], Y[i]))
+  end
+end
+fig, ax = subplots()
+ax.contourf(X, Y, Z)
+ax.xaxis.set_tick_params(labelsize=20)
+ax.yaxis.set_tick_params(labelsize=20)
+ax.grid(true)
+#=
 fig, ax = subplots()
 ax.plot(x, Tx, ".", ms=5, label="KAM-Cheb")
 ax.plot(x, Tx_ana, "P", ms=5, label="Analytical")
@@ -386,17 +414,4 @@ ax.legend(fontsize=20)
 ax.grid(true)
 tight_layout()
 
-# Test the ode solver
-#=
-x_gr = Array(LinRange(-r,r,M))
-v0, vn = exp(2), exp(-2)
-fig, ax = subplots()
-ax.xaxis.set_tick_params(labelsize=30)
-ax.yaxis.set_tick_params(labelsize=30)
-ax.plot(x_gr, exp.(2*x_gr), ".", label="Analytical", ms=10)
-Tx = transport_by_kam(M,1,r,1,1,m,s,w,k,v0,vn)
-x_cheb = cheb_pts(M+1)
-ax.plot(x_cheb, Tx, "^", label="Transport", ms=10)
-ax.legend(fontsize=30)
-#@show norm(Tx - exp.(2*x_gr))
 =#
